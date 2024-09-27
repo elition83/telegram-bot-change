@@ -1,6 +1,8 @@
 import logging
 import os
 import requests
+import time
+from cachetools import TTLCache
 from dotenv import load_dotenv
 from telegram import ForceReply, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, CallbackQueryHandler, filters
@@ -12,20 +14,27 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
-# Функция для получения курса валюты без использования API-ключа
+# Настройка кэша (максимум 10 записей, время жизни 5 часов = 18000 секунд)
+cache = TTLCache(maxsize=10, ttl=18000)
+
+# Функция для получения курса валюты с использованием кэша
 def get_exchange_rate(currency: str) -> str:
+    # Проверяем, есть ли курс в кэше
+    if currency in cache:
+        return cache[currency]
+
+    # Если курса нет в кэше, запрашиваем его и обновляем кэш
     try:
-        # Запрос на API exchangerate.host
-        response = requests.get(f"https://api.exchangerate.host/latest?base=USD")
+        response = requests.get(f"https://open.er-api.com/v6/latest/USD")
         data = response.json()
-        if currency in data["rates"]:
+        if data["result"] == "success" and currency in data["rates"]:
             rate = data["rates"][currency]
-            return f"1 USD = {rate} {currency}"
+            cache[currency] = f"1 USD = {rate} {currency}"  # Обновляем кэш
+            return cache[currency]
         else:
-            return "Валюта не найдена"
+            return "Валюта не найдена или ошибка данных"
     except Exception as e:
-        logger.error(f"Ошибка при получении курса: {e}")
-        return "Не удалось получить курс валют."
+        return f"Ошибка при получении курса: {e}"
 
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
