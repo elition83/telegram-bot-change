@@ -17,7 +17,7 @@ import os
 from dotenv import load_dotenv
 from telegram import ForceReply, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
-token = os.getenv("TOKEN")
+
 
 # Enable logging
 logging.basicConfig(
@@ -51,9 +51,16 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def main() -> None:
     """Start the bot."""
+    # Загрузить переменные окружения из .env файла
     load_dotenv()
-    print(f"token = {token}")
-    logging.info(f"token = {token}")
+
+    # Попробовать получить значение переменной окружения TOKEN
+    token = os.getenv("TOKEN")
+
+    # Если переменная TOKEN отсутствует, вывести предупреждение и завершить выполнение
+    if not token:
+        logging.error("Переменная окружения TOKEN не установлена. Убедитесь, что она добавлена в файл .env или в систему.")
+        raise ValueError("Переменная окружения TOKEN не установлена")
 
     # Создайте приложение и передайте ему токен вашего бота.
     application = Application.builder().token(os.environ["TOKEN"]).build()
