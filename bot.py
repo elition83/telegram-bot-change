@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # pylint: disable=unused-argument
 # This work is dedicated to the public domain under the Creative Commons CC0 License.
-.
 
 """
 Простой бот для ответа на сообщения Telegram.
