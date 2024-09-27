@@ -51,9 +51,9 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def main() -> None:
     """Start the bot."""
+    load_dotenv()
     print(f"token = {token}")
     logging.info(f"token = {token}")
-    load_dotenv()
 
     # Создайте приложение и передайте ему токен вашего бота.
     application = Application.builder().token(os.environ["TOKEN"]).build()
