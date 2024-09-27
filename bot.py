@@ -17,6 +17,7 @@ import os
 from dotenv import load_dotenv
 from telegram import ForceReply, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+token = os.getenv("TOKEN")
 
 # Enable logging
 logging.basicConfig(
@@ -50,6 +51,8 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def main() -> None:
     """Start the bot."""
+    print(f"token = {token}")
+    logging.info(f"token = {token}")
     load_dotenv()
 
     # Создайте приложение и передайте ему токен вашего бота.
