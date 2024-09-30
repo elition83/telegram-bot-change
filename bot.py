@@ -25,21 +25,20 @@ def get_main_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 # Функция для получения курса валюты с использованием кэша
-def get_exchange_rate(currency: str) -> str:
-    if currency in cache:
-        return cache[currency]
+def get_exchange_rate(base_currency: str) -> dict:
+    if base_currency in cache:
+        return cache[base_currency]
 
     try:
-        response = requests.get(f"https://open.er-api.com/v6/latest/USD")
+        response = requests.get(f"https://open.er-api.com/v6/latest/{base_currency}")
         data = response.json()
-        if data["result"] == "success" and currency in data["rates"]:
-            rate = data["rates"][currency]
-            cache[currency] = f"1 USD = {rate} {currency}"  # Обновляем кэш
-            return cache[currency]
+        if data["result"] == "success":
+            cache[base_currency] = data["rates"]  # Обновляем кэш для выбранной валюты
+            return cache[base_currency]
         else:
-            return "Валюта не найдена или ошибка данных"
+            return {}
     except Exception as e:
-        return f"Ошибка при получении курса: {e}"
+        return {}
 
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -51,7 +50,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # Обработчик для кнопки "Текущий курс"
 async def current_rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Курсы валют", reply_markup=get_main_keyboard())
+    await update.message.reply_text("Выберите базовую валюту для курсов:", reply_markup=get_main_keyboard())
 
 # Обработчик для кнопки "Заявки"
 async def requests(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -61,35 +60,42 @@ async def requests(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def submit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Введите данные для заявки", reply_markup=get_main_keyboard())
 
-# Обработчик команды /help
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Используйте /rate для получения курса валют.")
-
 # Обработчик команды /rate для отображения кнопок с валютами
 async def rate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = [
         [
-            InlineKeyboardButton("Рубль", callback_data='RUB'),
-            InlineKeyboardButton("Доллар", callback_data='USD'),
-            InlineKeyboardButton("Лира", callback_data='TRY')
+            InlineKeyboardButton("Рубль (RUB)", callback_data='RUB'),
+            InlineKeyboardButton("Доллар (USD)", callback_data='USD'),
+            InlineKeyboardButton("Лира (TRY)", callback_data='TRY')
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Выберите валюту:", reply_markup=reply_markup)
+    await update.message.reply_text("Выберите базовую валюту:", reply_markup=reply_markup)
 
 # Обработчик выбора валюты
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
 
-    # Определение выбранной валюты
-    currency = query.data
+    # Определение выбранной валюты как базовой
+    base_currency = query.data
 
-    # Получение курса валюты
-    rate = get_exchange_rate(currency)
+    # Получение курса валют относительно выбранной базовой валюты
+    rates = get_exchange_rate(base_currency)
+
+    # Формирование сообщения с курсами
+    if rates:
+        rate_message = (
+            f"Курс валют относительно {base_currency}:\n"
+            f"1 {base_currency} = {rates.get('USD', 'неизвестно')} USD\n"
+            f"1 {base_currency} = {rates.get('RUB', 'неизвестно')} RUB\n"
+            f"1 {base_currency} = {rates.get('TRY', 'неизвестно')} TRY\n"
+        )
+    else:
+        rate_message = "Не удалось получить курс валют."
 
     # Отправка сообщения с курсом
-    await query.edit_message_text(text=f"Текущий курс {currency}: {rate}")
+    await query.edit_message_text(text=rate_message)
 
 # Обработчик эхо сообщений
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
