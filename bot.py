@@ -1,10 +1,9 @@
 import logging
 import os
 import requests
-import time
 from cachetools import TTLCache
 from dotenv import load_dotenv
-from telegram import ForceReply, Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, CallbackQueryHandler, filters
 
 # Логирование
@@ -17,13 +16,19 @@ logger = logging.getLogger(__name__)
 # Настройка кэша (максимум 10 записей, время жизни 5 часов = 18000 секунд)
 cache = TTLCache(maxsize=10, ttl=18000)
 
+# Постоянная клавиатура с кнопками
+def get_main_keyboard():
+    keyboard = [
+        ["Текущий курс", "Заявки"],
+        ["Подать заявку"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
 # Функция для получения курса валюты с использованием кэша
 def get_exchange_rate(currency: str) -> str:
-    # Проверяем, есть ли курс в кэше
     if currency in cache:
         return cache[currency]
 
-    # Если курса нет в кэше, запрашиваем его и обновляем кэш
     try:
         response = requests.get(f"https://open.er-api.com/v6/latest/USD")
         data = response.json()
@@ -40,8 +45,21 @@ def get_exchange_rate(currency: str) -> str:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_html(
-        rf"Hi {user.mention_html()}!", reply_markup=ForceReply(selective=True),
+        rf"Привет, {user.mention_html()}!",
+        reply_markup=get_main_keyboard(),  # Добавляем клавиатуру к сообщению
     )
+
+# Обработчик для кнопки "Текущий курс"
+async def current_rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("Курсы валют", reply_markup=get_main_keyboard())
+
+# Обработчик для кнопки "Заявки"
+async def requests(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("Список заявок", reply_markup=get_main_keyboard())
+
+# Обработчик для кнопки "Подать заявку"
+async def submit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("Введите данные для заявки", reply_markup=get_main_keyboard())
 
 # Обработчик команды /help
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -68,14 +86,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     currency = query.data
 
     # Получение курса валюты
-    if currency == 'RUB':
-        rate = get_exchange_rate("RUB")
-    elif currency == 'USD':
-        rate = get_exchange_rate("USD")
-    elif currency == 'TRY':
-        rate = get_exchange_rate("TRY")
-    else:
-        rate = "Курс неизвестен"
+    rate = get_exchange_rate(currency)
 
     # Отправка сообщения с курсом
     await query.edit_message_text(text=f"Текущий курс {currency}: {rate}")
@@ -101,6 +112,11 @@ def main() -> None:
     
     # Обработчик выбора валюты по нажатию кнопки
     application.add_handler(CallbackQueryHandler(button))
+
+    # Обработчики сообщений с кнопками
+    application.add_handler(MessageHandler(filters.Regex('^Текущий курс$'), current_rate))
+    application.add_handler(MessageHandler(filters.Regex('^Заявки$'), requests))
+    application.add_handler(MessageHandler(filters.Regex('^Подать заявку$'), submit_request))
 
     # Эхо-ответ на текстовые сообщения
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
