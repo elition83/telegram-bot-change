@@ -113,7 +113,6 @@ def main() -> None:
 
     # Регистрируем обработчики команд
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("rate", rate_command))
     
     # Обработчик выбора валюты по нажатию кнопки
