@@ -23,14 +23,6 @@ def get_main_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# Клавиатура для выбора валюты
-def get_currency_selection_keyboard():
-    keyboard = [
-        ["Рубль", "Лира", "Доллар"],
-        ["Отмена"]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
 # Функция для получения курса валюты с использованием кэша
 def get_exchange_rate(base_currency: str) -> dict:
     if base_currency in cache:
@@ -61,23 +53,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=get_main_keyboard()
     )
 
-# Обработчик для кнопки "Текущий курс"
+# Обработчик кнопки "Текущий курс" (запускает логику /rate)
 async def current_rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        "Выберите базовую валюту для отображения курсов:",
-        reply_markup=get_currency_selection_keyboard()
-    )
-
-# Обработчик для кнопки "Заявки"
-async def requests(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Здесь будут отображаться ваши заявки.", reply_markup=get_main_keyboard())
-
-# Обработчик для кнопки "Подать заявку"
-async def submit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Введите данные для подачи заявки.", reply_markup=get_main_keyboard())
-
-# Обработчик команды /rate для отображения кнопок с валютами
-async def rate_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = [
         [
             InlineKeyboardButton("Лира (TRY)", callback_data="TRY"),
@@ -117,6 +94,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     await query.edit_message_text(text=rate_message)
 
+# Обработчик для кнопки "Заявки"
+async def requests(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("Здесь будут отображаться ваши заявки.", reply_markup=get_main_keyboard())
+
+# Обработчик для кнопки "Подать заявку"
+async def submit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("Введите данные для подачи заявки.", reply_markup=get_main_keyboard())
+
 # Обработчик эхо сообщений
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.text.lower() not in {"текущий курс", "заявки", "подать заявку"}:
@@ -134,7 +119,6 @@ def main() -> None:
 
     # Регистрация обработчиков
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("rate", rate_command))
     application.add_handler(CallbackQueryHandler(button))
     application.add_handler(MessageHandler(filters.Regex("^Текущий курс$"), current_rate))
     application.add_handler(MessageHandler(filters.Regex("^Заявки$"), requests))
