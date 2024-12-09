@@ -47,6 +47,26 @@ def get_currency_keyboard(prefix="rate_", exclude=None):
     ]
     return InlineKeyboardMarkup(keyboard)
 
+def format_number(value: float, significant_digits: int = 3) -> str:
+    """
+    Форматирует число, оставляя заданное количество значащих цифр после ведущих нулей.
+
+    :param value: Число для форматирования.
+    :param significant_digits: Количество значащих цифр.
+    :return: Отформатированное число в виде строки.
+    """
+    if value == 0:
+        return "0"
+    
+    # Конвертируем число в научную нотацию и выделяем основу и экспоненту
+    scientific_format = f"{value:.{significant_digits}e}"
+    base, exponent = scientific_format.split("e")
+    
+    # Убираем лишние нули и возвращаем в обычный вид
+    formatted_value = f"{float(base):.{significant_digits}f}"
+    return formatted_value.rstrip("0").rstrip(".")
+
+
 # Получение курсов валют с сайта ЦБ РФ
 def get_exchange_rate(base_currency: str) -> dict:
     if base_currency in cache:
@@ -132,7 +152,8 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         message = f"Курс валют относительно {SUPPORTED_CURRENCIES[base_currency]['name']} ({base_currency}):\n"
         for currency, rate in rates.items():
             if currency != base_currency:
-                message += f"1 {base_currency} = {rate:.2f} {currency}\n"
+                formatted_rate = format_number(rate, significant_digits=3)
+                message += f"1 {base_currency} = {formatted_rate} {currency}\n"
     else:
         message = "Не удалось получить курсы валют. Попробуйте позже."
 
@@ -141,6 +162,7 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # Возвращаемся на стартовое меню
     await start(update, context)
+
 
 # Обработчик кнопки "Подать заявку"
 async def submit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -174,7 +196,7 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
             user_requests[user_id]['from_currency'] = from_currency
             context.user_data['state'] = 'awaiting_amount'
             await query.edit_message_text(
-               f"Вы выбрали: {SUPPORTED_CURRENCIES[from_currency]['name']} ({from_currency}).\nВведите сумму для обмена:"
+               f"Вы выбрали: {SUPPORTED_CURRENCIES[from_currency]['name']} ({from_currency}). для обмена.\nВведите сумму для обмена:"
             )
         else:
             await query.answer("Ошибка выбора валюты. Попробуйте ещё раз.", show_alert=True)
@@ -205,11 +227,12 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
             if rates:
                 exchange_rate = rates.get(to_currency)
                 if exchange_rate:
-                    converted_amount = amount * exchange_rate
+                    converted_amount = amount / exchange_rate
+                    formatted_amount = format_number(converted_amount, significant_digits=3)
                     user_requests[user_id]['converted_amount'] = converted_amount
                     context.user_data['state'] = 'awaiting_confirmation'
                     await query.edit_message_text(
-                        f"Вы хотите обменять {amount} {from_currency} на {converted_amount:.2f} {to_currency}. Подтвердить?",
+                        f"Вы хотите обменять {amount} {from_currency} на {formatted_amount} {to_currency}. Подтвердить?",
                         reply_markup=InlineKeyboardMarkup([
                             [InlineKeyboardButton("Да", callback_data="confirm_yes")],
                             [InlineKeyboardButton("Нет", callback_data="confirm_no")]
@@ -219,8 +242,7 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
                     await query.edit_message_text("Не удалось получить курс для выбранной валюты.")
             else:
                 await query.edit_message_text("Не удалось получить курсы валют. Попробуйте позже.")
-        else:
-            await query.answer("Ошибка выбора валюты. Попробуйте ещё раз.", show_alert=True)
+
 
 # Обработка текста для этапа ввода суммы
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -245,8 +267,10 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 async def handle_request_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     if query.data == "confirm_yes":
+        converted_amount = user_requests[query.from_user.id]['converted_amount']
+        formatted_amount = format_number(converted_amount, significant_digits=3)
         await query.answer("Вы выбрали: Да.")
-        await query.edit_message_text("Заявка успешно сохранена!")
+        await query.edit_message_text(f"Заявка успешно сохранена! Итоговая сумма: {formatted_amount}")
     elif query.data == "confirm_no":
         await query.answer("Вы выбрали: Нет.")
         await query.edit_message_text("Заявка отменена.")
