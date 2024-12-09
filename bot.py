@@ -19,7 +19,12 @@ cache = TTLCache(maxsize=10, ttl=18000)
 user_requests = {}
 
 # Поддерживаемые валюты
-SUPPORTED_CURRENCIES = {"TRY": "Лира", "RUB": "Рубль", "USD": "Доллар", "EUR": "Евро"}
+SUPPORTED_CURRENCIES = {
+    "TRY": {"name": "Лира", "symbol": "₺"},
+    "RUB": {"name": "Рубль", "symbol": "₽"},
+    "USD": {"name": "Доллар", "symbol": "$"},
+    "EUR": {"name": "Евро", "symbol": "€"}
+}
 
 # Основная клавиатура
 def get_main_keyboard():
@@ -34,7 +39,10 @@ def get_currency_keyboard(prefix="rate_", exclude=None):
     currencies = SUPPORTED_CURRENCIES.copy()
     if exclude and exclude in currencies:
         currencies.pop(exclude)
-    keyboard = [[InlineKeyboardButton(f"{name} ({code})", callback_data=f"{prefix}{code}")] for code, name in currencies.items()]
+    keyboard = [
+        [InlineKeyboardButton(f"{data['name']} ({code})", callback_data=f"{prefix}{code}")]
+        for code, data in currencies.items()
+    ]
     return InlineKeyboardMarkup(keyboard)
 
 # Получение курсов валют
@@ -66,7 +74,7 @@ async def current_rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await query.answer()
     await query.edit_message_text(
         "Выберите базовую валюту для отображения курсов:",
-        reply_markup=get_currency_keyboard(prefix="rate_")  # Используем префикс для курса
+        reply_markup=get_currency_keyboard(prefix="rate_")
     )
 
 # Обработчик выбора валюты (текущий курс)
@@ -74,13 +82,13 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     await query.answer()
     if not query.data.startswith("rate_"):
-        return  # Игнорируем callback_data без нужного префикса
+        return
 
     base_currency = query.data.replace("rate_", "")
     rates = get_exchange_rate(base_currency)
 
     if rates:
-        message = f"Курс валют относительно {SUPPORTED_CURRENCIES[base_currency]} ({base_currency}):\n"
+        message = f"Курс валют относительно {SUPPORTED_CURRENCIES[base_currency]['name']} ({base_currency}):\n"
         for currency, rate in rates.items():
             if currency != base_currency:
                 message += f"1 {base_currency} = {rate:.2f} {currency}\n"
@@ -97,7 +105,7 @@ async def submit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data['state'] = 'awaiting_from_currency'
     await query.edit_message_text(
         "Выберите валюту, которую хотите обменять:",
-        reply_markup=get_currency_keyboard(prefix="req_")  # Используем префикс для заявки
+        reply_markup=get_currency_keyboard(prefix="req_")
     )
 
 # Обработка заявки (по этапам)
@@ -184,9 +192,9 @@ def main() -> None:
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(current_rate, pattern="^current_rate$"))
-    application.add_handler(CallbackQueryHandler(handle_currency, pattern="^rate_(TRY|RUB|USD|EUR)$"))
+    application.add_handler(CallbackQueryHandler(handle_currency, pattern="^rate_.*$"))
     application.add_handler(CallbackQueryHandler(submit_request, pattern="^submit_request$"))
-    application.add_handler(CallbackQueryHandler(handle_request_input, pattern="^req_(TRY|RUB|USD|EUR|confirm_yes|confirm_no)$"))
+    application.add_handler(CallbackQueryHandler(handle_request_input, pattern="^req_.*$"))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
 
     application.run_polling()
