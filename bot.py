@@ -1,6 +1,7 @@
 import logging
 import os
 import requests
+from xml.etree import ElementTree as ET
 from cachetools import TTLCache
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
@@ -20,10 +21,10 @@ user_requests = {}
 
 # Поддерживаемые валюты
 SUPPORTED_CURRENCIES = {
-    "TRY": {"name": "Лира", "symbol": "₺"},
-    "RUB": {"name": "Рубль", "symbol": "₽"},
-    "USD": {"name": "Доллар", "symbol": "$"},
-    "EUR": {"name": "Евро", "symbol": "€"}
+    "TRY": {"name": "Лира", "char_code": "TRY"},
+    "RUB": {"name": "Рубль", "char_code": "RUB"},
+    "USD": {"name": "Доллар", "char_code": "USD"},
+    "EUR": {"name": "Евро", "char_code": "EUR"}
 }
 
 # Основная клавиатура
@@ -45,22 +46,35 @@ def get_currency_keyboard(prefix="rate_", exclude=None):
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# Получение курсов валют
+# Получение курсов валют с сайта ЦБ РФ
 def get_exchange_rate(base_currency: str) -> dict:
     if base_currency in cache:
         logger.info(f"Курс {base_currency} получен из кэша")
         return cache[base_currency]
 
     try:
-        response = requests.get(f"https://open.er-api.com/v6/latest/{base_currency}")
+        response = requests.get("https://www.cbr.ru/scripts/XML_daily.asp")
         response.raise_for_status()
-        data = response.json()
-        if data.get("result") == "success" and data.get("rates"):
-            filtered_rates = {k: v for k, v in data["rates"].items() if k in SUPPORTED_CURRENCIES}
-            cache[base_currency] = filtered_rates
-            return filtered_rates
+
+        # Парсинг XML
+        root = ET.fromstring(response.content)
+        rates = {}
+        for currency in root.findall("Valute"):
+            char_code = currency.find("CharCode").text
+            value = float(currency.find("Value").text.replace(",", "."))
+            nominal = int(currency.find("Nominal").text)
+            if char_code in SUPPORTED_CURRENCIES:
+                rates[char_code] = value / nominal
+
+        # Добавляем RUB (курс относительно самого себя)
+        rates["RUB"] = 1.0
+
+        cache[base_currency] = rates
+        return rates
     except requests.RequestException as e:
-        logger.error(f"Ошибка запроса к API: {e}")
+        logger.error(f"Ошибка запроса к API ЦБ РФ: {e}")
+    except ET.ParseError as e:
+        logger.error(f"Ошибка парсинга XML: {e}")
     return {}
 
 # Обработчик команды /start
@@ -129,7 +143,6 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
     elif state == 'awaiting_to_currency':
         if text.startswith("req_"):
             to_currency = text.split("_")[1]
-            user_requests[user_id]['to_currency'] = to_currency
             from_currency = user_requests[user_id]['from_currency']
             amount = user_requests[user_id]['amount']
             rates = get_exchange_rate(from_currency)
