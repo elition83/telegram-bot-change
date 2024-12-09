@@ -117,6 +117,7 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
 		user_requests[user_id]['from_currency'] = text
 		context.user_data['state'] = 'awaiting_amount'
 		await query.edit_message_text("Введите сумму для обмена (например, 100):")
+
 	elif state == 'awaiting_amount':
 		try:
 			amount = float(text)
@@ -129,9 +130,11 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
 			)
 		except ValueError:
 			await query.edit_message_text("Введите корректное число:")
+
 	elif state == 'awaiting_to_currency':
-		to_currency = text
+		user_requests[user_id]['to_currency'] = text
 		from_currency = user_requests[user_id]['from_currency']
+		to_currency = text
 		amount = user_requests[user_id]['amount']
 		rates = get_exchange_rate(from_currency)
 
@@ -139,15 +142,30 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
 			exchange_rate = rates.get(to_currency)
 			if exchange_rate:
 				converted_amount = amount * exchange_rate
+				user_requests[user_id]['converted_amount'] = converted_amount
+				context.user_data['state'] = 'awaiting_confirmation'
 				await query.edit_message_text(
-					f"Вы хотите обменять {amount} {from_currency} на {converted_amount:.2f} {to_currency}.",
-					reply_markup=get_main_keyboard()
+					f"Вы хотите обменять {amount} {from_currency} на {converted_amount:.2f} {to_currency}. Подтвердить?",
+					reply_markup=InlineKeyboardMarkup([
+						[InlineKeyboardButton("Да", callback_data="confirm_yes")],
+						[InlineKeyboardButton("Нет", callback_data="confirm_no")]
+					])
 				)
 			else:
 				await query.edit_message_text("Не удалось получить курс для выбранной валюты.")
 		else:
 			await query.edit_message_text("Не удалось получить курсы валют. Попробуйте позже.")
-		context.user_data.pop('state', None)
+
+	elif state == 'awaiting_confirmation':
+		if text == "confirm_yes":
+			# Заносим данные в базу (в данном случае, в словарь user_requests)
+			request_data = user_requests.get(user_id, {})
+			logger.info(f"Заявка сохранена: {request_data}")
+			context.user_data.pop('state', None)
+			await query.edit_message_text("Заявка успешно сохранена!", reply_markup=get_main_keyboard())
+		elif text == "confirm_no":
+			context.user_data.pop('state', None)
+			await query.edit_message_text("Заявка отменена.", reply_markup=get_main_keyboard())
 
 # Основная функция
 def main() -> None:
