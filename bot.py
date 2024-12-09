@@ -3,8 +3,8 @@ import os
 import requests
 from cachetools import TTLCache
 from dotenv import load_dotenv
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 # Логирование
 logging.basicConfig(
@@ -37,50 +37,46 @@ def get_exchange_rate(base_currency: str) -> dict:
         logger.error(f"Ошибка запроса к API: {e}")
         return {}
 
+# Основная клавиатура
+def get_main_keyboard():
+    keyboard = [
+        ["Текущий курс", "Подать заявку"],
+        ["Мои заявки"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+# Inline-клавиатура для выбора валюты
+def get_currency_keyboard():
+    keyboard = [
+        [
+            InlineKeyboardButton("Лира (TRY)", callback_data="TRY"),
+            InlineKeyboardButton("Рубль (RUB)", callback_data="RUB"),
+        ],
+        [
+            InlineKeyboardButton("Доллар (USD)", callback_data="USD"),
+            InlineKeyboardButton("Евро (EUR)", callback_data="EUR"),
+        ],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    keyboard = [
-        [InlineKeyboardButton("Текущий курс", callback_data="current_rate")],
-        [InlineKeyboardButton("Подать заявку на обмен", callback_data="submit_request")],
-        [InlineKeyboardButton("Мои заявки", callback_data="my_requests")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
+    user = update.effective_user
     await update.message.reply_text(
-        "Привет! Выберите действие:", reply_markup=reply_markup
+        f"Привет, {user.mention_html()}! Выберите действие:",
+        reply_markup=get_main_keyboard(),
+        parse_mode="HTML"
     )
 
-# Обработчик выбора действия
-async def handle_action(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-
-    action = query.data
-    if action == "current_rate":
-        # Предлагаем выбор валют
-        keyboard = [
-            [
-                InlineKeyboardButton("Лира (TRY)", callback_data="TRY"),
-                InlineKeyboardButton("Рубль (RUB)", callback_data="RUB"),
-            ],
-            [
-                InlineKeyboardButton("Доллар (USD)", callback_data="USD"),
-                InlineKeyboardButton("Евро (EUR)", callback_data="EUR"),
-            ],
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(
-            "Выберите базовую валюту для отображения курсов:", reply_markup=reply_markup
-        )
-    elif action == "submit_request":
-        await query.edit_message_text("Функция подачи заявки пока не реализована.")
-    elif action == "my_requests":
-        await query.edit_message_text("Здесь будут отображаться ваши заявки.")
-    else:
-        await query.edit_message_text("Неизвестное действие. Попробуйте снова.")
+# Обработчик кнопки "Текущий курс"
+async def current_rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "Выберите базовую валюту для отображения курсов:",
+        reply_markup=get_currency_keyboard()
+    )
 
 # Обработчик выбора валюты
-async def show_rates(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
 
@@ -96,9 +92,27 @@ async def show_rates(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             f"1 {base_currency} = {rates.get('TRY', 'данные отсутствуют')} TRY\n"
         )
     else:
-        rate_message = "Не удалось получить курсы валют. Пожалуйста, повторите попытку позже."
+        rate_message = "Не удалось получить курсы валют. Попробуйте позже."
 
     await query.edit_message_text(text=rate_message)
+
+# Обработчик кнопки "Подать заявку"
+async def submit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "Введите данные для подачи заявки.",
+        reply_markup=get_main_keyboard()
+    )
+
+# Обработчик кнопки "Мои заявки"
+async def my_requests(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "Здесь будут отображаться ваши заявки.",
+        reply_markup=get_main_keyboard()
+    )
+
+# Обработчик текстовых сообщений (если ничего не подходит)
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("Команда не распознана. Используйте кнопки для действий.")
 
 def main() -> None:
     load_dotenv()
@@ -112,8 +126,11 @@ def main() -> None:
 
     # Регистрация обработчиков
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(handle_action, pattern="^(current_rate|submit_request|my_requests)$"))
-    application.add_handler(CallbackQueryHandler(show_rates, pattern="^(EUR|USD|RUB|TRY)$"))
+    application.add_handler(MessageHandler(filters.Regex("^Текущий курс$"), current_rate))
+    application.add_handler(CallbackQueryHandler(handle_currency, pattern="^(EUR|USD|RUB|TRY)$"))
+    application.add_handler(MessageHandler(filters.Regex("^Подать заявку$"), submit_request))
+    application.add_handler(MessageHandler(filters.Regex("^Мои заявки$"), my_requests))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
     # Запуск бота
     application.run_polling()
