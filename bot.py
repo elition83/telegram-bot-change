@@ -4,7 +4,7 @@ import requests
 from cachetools import TTLCache
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # Логирование
 logging.basicConfig(
@@ -48,7 +48,6 @@ def get_exchange_rate(base_currency: str) -> dict:
 		response.raise_for_status()
 		data = response.json()
 		if data.get("result") == "success" and data.get("rates"):
-			# Оставляем только поддерживаемые валюты
 			filtered_rates = {k: v for k, v in data["rates"].items() if k in SUPPORTED_CURRENCIES}
 			cache[base_currency] = filtered_rates
 			return filtered_rates
@@ -105,7 +104,26 @@ async def submit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 		reply_markup=get_currency_keyboard()
 	)
 
-# Обработка заявки (через InlineKeyboardMarkup)
+# Обработка текстовых данных (например, сумма обмена)
+async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	user_id = update.effective_user.id
+	text = update.message.text
+	state = context.user_data.get('state')
+
+	if state == 'awaiting_amount':
+		try:
+			amount = float(text)
+			user_requests[user_id]['amount'] = amount
+			context.user_data['state'] = 'awaiting_to_currency'
+			from_currency = user_requests[user_id]['from_currency']
+			await update.message.reply_text(
+				"Выберите валюту, на которую хотите обменять:",
+				reply_markup=get_currency_keyboard(exclude=from_currency)
+			)
+		except ValueError:
+			await update.message.reply_text("Введите корректное число:")
+
+# Обработка выбора валюты для заявки
 async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	query = update.callback_query
 	await query.answer()
@@ -117,20 +135,6 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
 		user_requests[user_id]['from_currency'] = text
 		context.user_data['state'] = 'awaiting_amount'
 		await query.edit_message_text("Введите сумму для обмена (например, 100):")
-
-	elif state == 'awaiting_amount':
-		try:
-			amount = float(text)
-			user_requests[user_id]['amount'] = amount
-			context.user_data['state'] = 'awaiting_to_currency'
-			from_currency = user_requests[user_id]['from_currency']
-			await query.edit_message_text(
-				"Выберите валюту, на которую хотите обменять:",
-				reply_markup=get_currency_keyboard(exclude=from_currency)
-			)
-		except ValueError:
-			await query.edit_message_text("Введите корректное число:")
-
 	elif state == 'awaiting_to_currency':
 		user_requests[user_id]['to_currency'] = text
 		from_currency = user_requests[user_id]['from_currency']
@@ -155,12 +159,9 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
 				await query.edit_message_text("Не удалось получить курс для выбранной валюты.")
 		else:
 			await query.edit_message_text("Не удалось получить курсы валют. Попробуйте позже.")
-
 	elif state == 'awaiting_confirmation':
 		if text == "confirm_yes":
-			# Заносим данные в базу (в данном случае, в словарь user_requests)
-			request_data = user_requests.get(user_id, {})
-			logger.info(f"Заявка сохранена: {request_data}")
+			logger.info(f"Заявка сохранена: {user_requests[user_id]}")
 			context.user_data.pop('state', None)
 			await query.edit_message_text("Заявка успешно сохранена!", reply_markup=get_main_keyboard())
 		elif text == "confirm_no":
@@ -182,6 +183,7 @@ def main() -> None:
 	application.add_handler(CallbackQueryHandler(handle_currency, pattern="^(TRY|RUB|USD|EUR)$"))
 	application.add_handler(CallbackQueryHandler(submit_request, pattern="^submit_request$"))
 	application.add_handler(CallbackQueryHandler(handle_request_input))
+	application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
 
 	application.run_polling()
 
