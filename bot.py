@@ -60,10 +60,30 @@ def get_exchange_rate(base_currency: str) -> dict:
 
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-	await update.message.reply_text(
-		"Привет! Выберите действие:",
-		reply_markup=get_main_keyboard()
-	)
+    # Убираем текущие клавиатуры
+    await update.message.reply_text(
+        reply_markup=ReplyKeyboardRemove()  # Убираем текущие клавиатуры
+    )
+
+    # Отправляем стандартное меню с основной клавиатурой
+    await update.message.reply_text(
+        "Выберите действие:",
+        reply_markup=get_main_keyboard()  # Основная клавиатура
+    )
+
+# Обработчик команды /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Удаляем текущие клавиатуры и отправляем стандартное приветствие
+    await update.message.reply_text(
+        "Привет! Выберите действие:",
+        reply_markup=ReplyKeyboardRemove()  # Убираем текущие клавиатуры
+    )
+
+    # Отправляем стандартную основную клавиатуру
+    await update.message.reply_text(
+        "Выберите действие:",
+        reply_markup=get_main_keyboard()  # Основная клавиатура
+    )
 
 # Обработчик кнопки "Текущий курс"
 async def current_rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -114,8 +134,12 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
 	if state == 'awaiting_from_currency':
 		user_requests[user_id]['from_currency'] = text
 		context.user_data['state'] = 'awaiting_amount'
-		await query.edit_message_text("Введите сумму для обмена (например, 100):")
+		await query.edit_message_text(
+			text="Введите сумму для обмена (например, 100):",
+			reply_markup=None  # Удаляем клавиатуру
+		)
 	elif state == 'awaiting_to_currency':
+		logger.info(f"Пользователь {user_id} выбрал целевую валюту {text}")
 		user_requests[user_id]['to_currency'] = text
 		from_currency = user_requests[user_id]['from_currency']
 		to_currency = text
