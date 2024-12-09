@@ -59,18 +59,33 @@ def get_exchange_rate(base_currency: str) -> dict:
         # Парсинг XML
         root = ET.fromstring(response.content)
         rates = {}
+        base_rate = None
+        base_nominal = 1
+
+        # Чтение всех валют
         for currency in root.findall("Valute"):
             char_code = currency.find("CharCode").text
             value = float(currency.find("Value").text.replace(",", "."))
             nominal = int(currency.find("Nominal").text)
+
+            if char_code == base_currency:
+                base_rate = value
+                base_nominal = nominal
+
             if char_code in SUPPORTED_CURRENCIES:
                 rates[char_code] = value / nominal
 
-        # Добавляем RUB (курс относительно самого себя)
+        # Добавляем RUB как базовую валюту
         rates["RUB"] = 1.0
+
+        # Если базовая валюта не RUB, пересчитываем курсы
+        if base_currency != "RUB" and base_rate:
+            for char_code in rates:
+                rates[char_code] = (rates[char_code] / base_rate) * base_nominal
 
         cache[base_currency] = rates
         return rates
+
     except requests.RequestException as e:
         logger.error(f"Ошибка запроса к API ЦБ РФ: {e}")
     except ET.ParseError as e:
@@ -79,8 +94,12 @@ def get_exchange_rate(base_currency: str) -> dict:
 
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Убираю текущие клавиатуры...", reply_markup=ReplyKeyboardRemove())
-    await update.message.reply_text("Привет! Выберите действие:", reply_markup=get_main_keyboard())
+    if update.message:
+        await update.message.reply_text("Убираю текущие клавиатуры...", reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text("Привет! Выберите действие:", reply_markup=get_main_keyboard())
+    elif update.callback_query:
+        query = update.callback_query
+        await query.message.reply_text("Привет! Выберите действие:", reply_markup=get_main_keyboard())
 
 # Обработчик кнопки "Текущий курс"
 async def current_rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -108,7 +127,12 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 message += f"1 {base_currency} = {rate:.2f} {currency}\n"
     else:
         message = "Не удалось получить курсы валют. Попробуйте позже."
+
+    # Отображаем курс
     await query.edit_message_text(text=message)
+
+    # Возвращаемся на стартовое меню
+    await start(update, context)
 
 # Обработчик кнопки "Подать заявку"
 async def submit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -122,76 +146,18 @@ async def submit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         reply_markup=get_currency_keyboard(prefix="req_")
     )
 
-# Обработка заявки (по этапам)
-async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+# Обработка подтверждения
+async def handle_request_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
-    user_id = query.from_user.id
-    text = query.data
-    state = context.user_data.get('state')
+    if query.data == "confirm_yes":
+        await query.answer("Вы выбрали: Да.")
+        await query.edit_message_text("Заявка успешно сохранена!")
+    elif query.data == "confirm_no":
+        await query.answer("Вы выбрали: Нет.")
+        await query.edit_message_text("Заявка отменена.")
 
-    if not state:
-        await query.edit_message_text("Неизвестное состояние. Попробуйте снова.", reply_markup=get_main_keyboard())
-        return
-
-    if state == 'awaiting_from_currency':
-        if text.startswith("req_"):
-            from_currency = text.split("_")[1]
-            user_requests[user_id]['from_currency'] = from_currency
-            context.user_data['state'] = 'awaiting_amount'
-            await query.edit_message_text("Введите сумму для обмена (например, 100):", reply_markup=None)
-
-    elif state == 'awaiting_to_currency':
-        if text.startswith("req_"):
-            to_currency = text.split("_")[1]
-            from_currency = user_requests[user_id]['from_currency']
-            amount = user_requests[user_id]['amount']
-            rates = get_exchange_rate(from_currency)
-
-            if rates:
-                exchange_rate = rates.get(to_currency)
-                if exchange_rate:
-                    converted_amount = amount * exchange_rate
-                    user_requests[user_id]['converted_amount'] = converted_amount
-                    context.user_data['state'] = 'awaiting_confirmation'
-                    await query.edit_message_text(
-                        f"Вы хотите обменять {amount} {from_currency} на {converted_amount:.2f} {to_currency}. Подтвердить?",
-                        reply_markup=InlineKeyboardMarkup([
-                            [InlineKeyboardButton("Да", callback_data="confirm_yes")],
-                            [InlineKeyboardButton("Нет", callback_data="confirm_no")]
-                        ])
-                    )
-                else:
-                    await query.edit_message_text("Не удалось получить курс для выбранной валюты.")
-            else:
-                await query.edit_message_text("Не удалось получить курсы валют. Попробуйте позже.")
-
-    elif state == 'awaiting_confirmation':
-        if text == "confirm_yes":
-            logger.info(f"Заявка сохранена: {user_requests[user_id]}")
-            context.user_data.pop('state', None)
-            await query.edit_message_text("Заявка успешно сохранена!", reply_markup=get_main_keyboard())
-        elif text == "confirm_no":
-            context.user_data.pop('state', None)
-            await query.edit_message_text("Заявка отменена.", reply_markup=get_main_keyboard())
-
-# Обработка текста для этапа ввода суммы
-async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-    text = update.message.text
-    state = context.user_data.get('state')
-
-    if state == 'awaiting_amount':
-        try:
-            amount = float(text)
-            user_requests[user_id]['amount'] = amount
-            context.user_data['state'] = 'awaiting_to_currency'
-            from_currency = user_requests[user_id]['from_currency']
-            await update.message.reply_text(
-                "Выберите валюту, на которую хотите обменять:",
-                reply_markup=get_currency_keyboard(prefix="req_", exclude=from_currency)
-            )
-        except ValueError:
-            await update.message.reply_text("Введите корректное число:")
+    # Возвращаемся на стартовое меню
+    await start(update, context)
 
 # Основная функция
 def main() -> None:
@@ -207,8 +173,7 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(current_rate, pattern="^current_rate$"))
     application.add_handler(CallbackQueryHandler(handle_currency, pattern="^rate_.*$"))
     application.add_handler(CallbackQueryHandler(submit_request, pattern="^submit_request$"))
-    application.add_handler(CallbackQueryHandler(handle_request_input, pattern="^req_.*$"))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
+    application.add_handler(CallbackQueryHandler(handle_request_confirmation, pattern="^confirm_.*$"))
 
     application.run_polling()
 
