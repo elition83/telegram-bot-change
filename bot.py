@@ -166,8 +166,10 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
             from_currency = text.split("_")[1]
             user_requests[user_id]['from_currency'] = from_currency
             context.user_data['state'] = 'awaiting_amount'
-            await query.answer(f"Вы выбрали: {SUPPORTED_CURRENCIES[from_currency]['name']}")
-            await query.edit_message_text("Введите сумму для обмена (например, 100):")
+            await query.edit_message_text(
+                f"Вы выбрали: {currency_name} ({from_currency}).\n"
+                "Введите сумму для обмена:"
+            )
         else:
             await query.answer("Ошибка выбора валюты. Попробуйте ещё раз.", show_alert=True)
 
