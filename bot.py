@@ -158,15 +158,13 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             for currency, rate in rates.items():
                 if currency != "RUB":
                     inverse_rate = 1 / rate
-                    formatted_rate = format_number(inverse_rate, significant_digits=3)
-                    message += f"1 RUB = {formatted_rate} {currency}\n"
+                    message += f"1 RUB = {inverse_rate:.6f} {currency}\n"
         else:
             # Для остальных валют стандартный формат
             message = f"Курс валют относительно {SUPPORTED_CURRENCIES[base_currency]['name']} ({base_currency}):\n"
             for currency, rate in rates.items():
                 if currency != base_currency:
-                    formatted_rate = format_number(rate, significant_digits=3)
-                    message += f"1 {base_currency} = {formatted_rate} {currency}\n"
+                    message += f"1 {base_currency} = {rate:.6f} {currency}\n"
     else:
         message = "Не удалось получить курсы валют. Попробуйте позже."
 
