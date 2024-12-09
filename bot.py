@@ -18,6 +18,9 @@ cache = TTLCache(maxsize=10, ttl=18000)
 # Хранилище заявок
 user_requests = {}
 
+# Поддерживаемые валюты
+SUPPORTED_CURRENCIES = {"TRY": "Лира", "RUB": "Рубль", "USD": "Доллар", "EUR": "Евро"}
+
 # Основная клавиатура
 def get_main_keyboard():
 	keyboard = [
@@ -28,7 +31,7 @@ def get_main_keyboard():
 
 # Inline клавиатура выбора валют
 def get_currency_keyboard(exclude=None):
-	currencies = {"TRY": "Лира", "RUB": "Рубль", "USD": "Доллар", "EUR": "Евро"}
+	currencies = SUPPORTED_CURRENCIES.copy()
 	if exclude:
 		currencies.pop(exclude, None)
 	keyboard = [[InlineKeyboardButton(f"{name} ({code})", callback_data=code)] for code, name in currencies.items()]
@@ -45,8 +48,10 @@ def get_exchange_rate(base_currency: str) -> dict:
 		response.raise_for_status()
 		data = response.json()
 		if data.get("result") == "success" and data.get("rates"):
-			cache[base_currency] = data["rates"]
-			return data["rates"]
+			# Оставляем только поддерживаемые валюты
+			filtered_rates = {k: v for k, v in data["rates"].items() if k in SUPPORTED_CURRENCIES}
+			cache[base_currency] = filtered_rates
+			return filtered_rates
 		else:
 			logger.error(f"Ошибка API: {data}")
 			return {}
@@ -79,7 +84,7 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 	rates = get_exchange_rate(base_currency)
 
 	if rates:
-		message = f"Курс валют относительно {base_currency}:\n"
+		message = f"Курс валют относительно {SUPPORTED_CURRENCIES[base_currency]} ({base_currency}):\n"
 		for currency, rate in rates.items():
 			if currency != base_currency:
 				message += f"1 {base_currency} = {rate:.2f} {currency}\n"
