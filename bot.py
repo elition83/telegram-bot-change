@@ -104,29 +104,9 @@ async def submit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 		reply_markup=get_currency_keyboard()
 	)
 
-# Обработка текстовых данных (например, сумма обмена)
-async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-	user_id = update.effective_user.id
-	text = update.message.text
-	state = context.user_data.get('state')
-
-	if state == 'awaiting_amount':
-		try:
-			amount = float(text)
-			user_requests[user_id]['amount'] = amount
-			context.user_data['state'] = 'awaiting_to_currency'
-			from_currency = user_requests[user_id]['from_currency']
-			await update.message.reply_text(
-				"Выберите валюту, на которую хотите обменять:",
-				reply_markup=get_currency_keyboard(exclude=from_currency)
-			)
-		except ValueError:
-			await update.message.reply_text("Введите корректное число:")
-
-# Обработка выбора валюты для заявки
+# Обработка заявки (по этапам)
 async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	query = update.callback_query
-	await query.answer()
 	user_id = query.from_user.id
 	text = query.data
 	state = context.user_data.get('state')
@@ -168,6 +148,25 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
 			context.user_data.pop('state', None)
 			await query.edit_message_text("Заявка отменена.", reply_markup=get_main_keyboard())
 
+# Обработка текста для этапа ввода суммы
+async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	user_id = update.effective_user.id
+	text = update.message.text
+	state = context.user_data.get('state')
+
+	if state == 'awaiting_amount':
+		try:
+			amount = float(text)
+			user_requests[user_id]['amount'] = amount
+			context.user_data['state'] = 'awaiting_to_currency'
+			from_currency = user_requests[user_id]['from_currency']
+			await update.message.reply_text(
+				"Выберите валюту, на которую хотите обменять:",
+				reply_markup=get_currency_keyboard(exclude=from_currency)
+			)
+		except ValueError:
+			await update.message.reply_text("Введите корректное число:")
+
 # Основная функция
 def main() -> None:
 	load_dotenv()
@@ -182,7 +181,7 @@ def main() -> None:
 	application.add_handler(CallbackQueryHandler(current_rate, pattern="^current_rate$"))
 	application.add_handler(CallbackQueryHandler(handle_currency, pattern="^(TRY|RUB|USD|EUR)$"))
 	application.add_handler(CallbackQueryHandler(submit_request, pattern="^submit_request$"))
-	application.add_handler(CallbackQueryHandler(handle_request_input))
+	application.add_handler(CallbackQueryHandler(handle_request_input, pattern="^(TRY|RUB|USD|EUR|confirm_yes|confirm_no)$"))
 	application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
 
 	application.run_polling()
