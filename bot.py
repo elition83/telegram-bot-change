@@ -12,32 +12,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Настройка кэша (максимум 10 записей, время жизни 5 часов = 18000 секунд)
+# Настройка кэша
 cache = TTLCache(maxsize=10, ttl=18000)
 
-# Хранилище для заявок (в памяти, можно заменить на базу данных)
+# Хранилище заявок
 user_requests = {}
-
-# Функция для получения курса валюты с использованием кэша
-def get_exchange_rate(base_currency: str) -> dict:
-	if base_currency in cache:
-		logger.info(f"Курс {base_currency} получен из кэша")
-		return cache[base_currency]
-
-	try:
-		response = requests.get(f"https://open.er-api.com/v6/latest/{base_currency}")
-		response.raise_for_status()
-		data = response.json()
-
-		if data.get("result") == "success" and data.get("rates"):
-			cache[base_currency] = data["rates"]
-			return data["rates"]
-		else:
-			logger.error(f"Ошибка при получении курса: {data}")
-			return {}
-	except requests.RequestException as e:
-		logger.error(f"Ошибка запроса к API: {e}")
-		return {}
 
 # Основная клавиатура
 def get_main_keyboard():
@@ -47,22 +26,39 @@ def get_main_keyboard():
 	]
 	return InlineKeyboardMarkup(keyboard)
 
-# Inline-клавиатура для выбора валюты
-def get_currency_keyboard(exclude: str = None):
-	currencies = ["Лира (TRY)", "Рубль (RUB)", "Доллар (USD)", "Евро (EUR)"]
+# Inline клавиатура выбора валют
+def get_currency_keyboard(exclude=None):
+	currencies = {"TRY": "Лира", "RUB": "Рубль", "USD": "Доллар", "EUR": "Евро"}
 	if exclude:
-		currencies = [currency for currency in currencies if exclude not in currency]
-
-	keyboard = [[InlineKeyboardButton(currency, callback_data=currency.split()[1])] for currency in currencies]
+		currencies.pop(exclude, None)
+	keyboard = [[InlineKeyboardButton(f"{name} ({code})", callback_data=code)] for code, name in currencies.items()]
 	return InlineKeyboardMarkup(keyboard)
+
+# Получение курсов валют
+def get_exchange_rate(base_currency: str) -> dict:
+	if base_currency in cache:
+		logger.info(f"Курс {base_currency} получен из кэша")
+		return cache[base_currency]
+
+	try:
+		response = requests.get(f"https://open.er-api.com/v6/latest/{base_currency}")
+		response.raise_for_status()
+		data = response.json()
+		if data.get("result") == "success" and data.get("rates"):
+			cache[base_currency] = data["rates"]
+			return data["rates"]
+		else:
+			logger.error(f"Ошибка API: {data}")
+			return {}
+	except requests.RequestException as e:
+		logger.error(f"Ошибка запроса к API: {e}")
+		return {}
 
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-	user = update.effective_user
 	await update.message.reply_text(
-		f"Привет, {user.mention_html()}! Выберите действие:",
-		reply_markup=get_main_keyboard(),
-		parse_mode="HTML"
+		"Привет! Выберите действие:",
+		reply_markup=get_main_keyboard()
 	)
 
 # Обработчик кнопки "Текущий курс"
@@ -83,27 +79,24 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 	rates = get_exchange_rate(base_currency)
 
 	if rates:
-		# Убираем базовую валюту из списка
-		rate_message = f"Курс валют относительно {base_currency}:\n"
+		message = f"Курс валют относительно {base_currency}:\n"
 		for currency, rate in rates.items():
 			if currency != base_currency:
-				rate_message += f"1 {base_currency} = {rate} {currency}\n"
+				message += f"1 {base_currency} = {rate:.2f} {currency}\n"
 	else:
-		rate_message = "Не удалось получить курсы валют. Попробуйте позже."
+		message = "Не удалось получить курсы валют. Попробуйте позже."
 
-	await query.edit_message_text(text=rate_message)
+	await query.edit_message_text(text=message)
 
 # Обработчик кнопки "Подать заявку"
 async def submit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	query = update.callback_query
 	await query.answer()
-
 	user_id = query.from_user.id
 	user_requests[user_id] = {}
 	context.user_data['state'] = 'awaiting_from_currency'
-
 	await query.edit_message_text(
-		"Какую валюту вы хотите обменять?",
+		"Выберите валюту, которую хотите обменять:",
 		reply_markup=get_currency_keyboard()
 	)
 
@@ -111,7 +104,6 @@ async def submit_request(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	query = update.callback_query
 	await query.answer()
-
 	user_id = query.from_user.id
 	text = query.data
 	state = context.user_data.get('state')
@@ -125,23 +117,21 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
 			amount = float(text)
 			user_requests[user_id]['amount'] = amount
 			context.user_data['state'] = 'awaiting_to_currency'
-
 			from_currency = user_requests[user_id]['from_currency']
 			await query.edit_message_text(
-				"На какую валюту вы хотите обменять?",
+				"Выберите валюту, на которую хотите обменять:",
 				reply_markup=get_currency_keyboard(exclude=from_currency)
 			)
 		except ValueError:
 			await query.edit_message_text("Введите корректное число:")
 	elif state == 'awaiting_to_currency':
-		user_requests[user_id]['to_currency'] = text
+		to_currency = text
 		from_currency = user_requests[user_id]['from_currency']
 		amount = user_requests[user_id]['amount']
 		rates = get_exchange_rate(from_currency)
 
 		if rates:
-			to_currency = text
-			exchange_rate = rates.get(to_currency, None)
+			exchange_rate = rates.get(to_currency)
 			if exchange_rate:
 				converted_amount = amount * exchange_rate
 				await query.edit_message_text(
