@@ -24,6 +24,14 @@ def get_main_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+# Постоянная клавиатура с кнопками
+def get_currency_selection_keyboard():
+    keyboard = [
+        ["Руль", "Лира","Долар"],
+        ["Отмена"]
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
 # Функция для получения курса валюты с использованием кэша
 def get_exchange_rate(base_currency: str) -> dict:
     if base_currency in cache:
@@ -50,7 +58,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # Обработчик для кнопки "Текущий курс"
 async def current_rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Выберите базовую валюту для курсов:", reply_markup=get_main_keyboard())
+    await update.message.reply_text("Выберите базовую валюту для курсов:", reply_markup=get_currency_selection_keyboard())
 
 # Обработчик для кнопки "Заявки"
 async def requests(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
