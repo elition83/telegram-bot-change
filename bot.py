@@ -47,6 +47,26 @@ def get_currency_keyboard(prefix="rate_", exclude=None):
     ]
     return InlineKeyboardMarkup(keyboard)
 
+def format_number(value: float, significant_digits: int = 3) -> str:
+    """
+    Форматирует число, оставляя заданное количество значащих цифр после ведущих нулей.
+
+    :param value: Число для форматирования.
+    :param significant_digits: Количество значащих цифр.
+    :return: Отформатированное число в виде строки.
+    """
+    if value == 0:
+        return "0"
+    
+    # Конвертируем число в научную нотацию и выделяем основу и экспоненту
+    scientific_format = f"{value:.{significant_digits}e}"
+    base, exponent = scientific_format.split("e")
+    
+    # Убираем лишние нули и возвращаем в обычный вид
+    formatted_value = f"{float(base):.{significant_digits}f}"
+    return formatted_value.rstrip("0").rstrip(".")
+
+
 # Получение курсов валют с сайта ЦБ РФ
 def get_exchange_rate(base_currency: str) -> dict:
     if base_currency in cache:
@@ -60,32 +80,38 @@ def get_exchange_rate(base_currency: str) -> dict:
         # Парсинг XML
         root = ET.fromstring(response.content)
         rates = {}
-        rates["RUB"] = 1.0  # RUB как базовая валюта
+        base_rate = None
+        base_nominal = 1
 
         # Чтение всех валют
         for currency in root.findall("Valute"):
             char_code = currency.find("CharCode").text
             value = float(currency.find("Value").text.replace(",", "."))
             nominal = int(currency.find("Nominal").text)
-            rates[char_code] = value / nominal  # Курс валюты относительно RUB
 
-        # Преобразование курсов в зависимости от базовой валюты
-        base_rate = rates.get(base_currency)
-        if not base_rate:
-            raise ValueError(f"Курс для базовой валюты {base_currency} не найден")
+            if char_code == base_currency:
+                base_rate = value
+                base_nominal = nominal
 
-        converted_rates = {char_code: rate / base_rate for char_code, rate in rates.items()}
-        cache[base_currency] = converted_rates
-        return converted_rates
+            if char_code in SUPPORTED_CURRENCIES:
+                rates[char_code] = value / nominal
+
+        # Добавляем RUB как базовую валюту
+        rates["RUB"] = 1.0
+
+        # Если базовая валюта не RUB, пересчитываем курсы
+        if base_currency != "RUB" and base_rate:
+            for char_code in rates:
+                rates[char_code] = (rates[char_code] / base_rate) * base_nominal
+
+        cache[base_currency] = rates
+        return rates
 
     except requests.RequestException as e:
         logger.error(f"Ошибка запроса к API ЦБ РФ: {e}")
     except ET.ParseError as e:
         logger.error(f"Ошибка парсинга XML: {e}")
-    except ValueError as e:
-        logger.error(f"Ошибка обработки курсов: {e}")
     return {}
-
 
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -130,7 +156,6 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     else:
         message = "Не удалось получить курсы валют. Попробуйте позже."
 
-
     # Отображаем курс
     await query.edit_message_text(text=message)
 
@@ -169,7 +194,7 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
             user_requests[user_id]['from_currency'] = from_currency
             context.user_data['state'] = 'awaiting_amount'
             await query.edit_message_text(
-               f"Вы выбрали: {SUPPORTED_CURRENCIES[from_currency]['name']} ({from_currency}).\nВведите сумму для обмена:"
+               f"Вы выбрали: {SUPPORTED_CURRENCIES[from_currency]['name']} ({from_currency}). для обмена.\nВведите сумму для обмена:"
             )
         else:
             await query.answer("Ошибка выбора валюты. Попробуйте ещё раз.", show_alert=True)
@@ -200,7 +225,7 @@ async def handle_request_input(update: Update, context: ContextTypes.DEFAULT_TYP
             if rates:
                 exchange_rate = rates.get(to_currency)
                 if exchange_rate:
-                    converted_amount = amount * exchange_rate
+                    converted_amount = amount / exchange_rate
                     user_requests[user_id]['converted_amount'] = converted_amount
                     context.user_data['state'] = 'awaiting_confirmation'
                     await query.edit_message_text(
