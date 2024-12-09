@@ -95,9 +95,7 @@ def get_exchange_rate(base_currency: str) -> dict:
 
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    await query.message.reply_text(
+    await update.message.reply_text(
         "Привет! Выберите действие:", reply_markup=get_main_keyboard()
     )
 
