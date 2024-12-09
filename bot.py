@@ -69,6 +69,7 @@ def format_number(value: float, significant_digits: int = 3) -> str:
 
 # Получение курсов валют с сайта ЦБ РФ
 # Получение курсов валют с сайта ЦБ РФ
+# Получение курсов валют с сайта ЦБ РФ
 def get_exchange_rate(base_currency: str) -> dict:
     if base_currency in cache:
         logger.info(f"Курс {base_currency} получен из кэша")
@@ -86,14 +87,17 @@ def get_exchange_rate(base_currency: str) -> dict:
         # Чтение всех валют
         for currency in root.findall("Valute"):
             char_code = currency.find("CharCode").text
-            vunit_rate = float(currency.find("VunitRate").text.replace(",", "."))
 
-            # Сохраняем VunitRate для каждой валюты
-            rates[char_code] = vunit_rate
+            # Проверяем, интересует ли нас эта валюта
+            if char_code in SUPPORTED_CURRENCIES:
+                vunit_rate = float(currency.find("VunitRate").text.replace(",", "."))
 
-            # Определяем VunitRate базовой валюты
-            if char_code == base_currency:
-                base_rate = vunit_rate
+                # Сохраняем VunitRate для каждой валюты
+                rates[char_code] = vunit_rate
+
+                # Определяем VunitRate базовой валюты
+                if char_code == base_currency:
+                    base_rate = vunit_rate
 
         # Добавляем RUB как базовую валюту
         rates["RUB"] = 1.0
