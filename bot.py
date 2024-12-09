@@ -68,8 +68,6 @@ def format_number(value: float, significant_digits: int = 3) -> str:
 
 
 # Получение курсов валют с сайта ЦБ РФ
-# Получение курсов валют с сайта ЦБ РФ
-# Получение курсов валют с сайта ЦБ РФ
 def get_exchange_rate(base_currency: str) -> dict:
     if base_currency in cache:
         logger.info(f"Курс {base_currency} получен из кэша")
@@ -105,7 +103,7 @@ def get_exchange_rate(base_currency: str) -> dict:
         # Если базовая валюта не RUB, пересчитываем курсы
         if base_currency != "RUB" and base_rate:
             for char_code in rates:
-                rates[char_code] = rates[char_code] * base_rate
+                rates[char_code] = base_rate / rates[char_code]
 
         # Кэшируем результат
         cache[base_currency] = rates
