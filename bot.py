@@ -68,6 +68,7 @@ def format_number(value: float, significant_digits: int = 3) -> str:
 
 
 # Получение курсов валют с сайта ЦБ РФ
+# Получение курсов валют с сайта ЦБ РФ
 def get_exchange_rate(base_currency: str) -> dict:
     if base_currency in cache:
         logger.info(f"Курс {base_currency} получен из кэша")
@@ -81,20 +82,18 @@ def get_exchange_rate(base_currency: str) -> dict:
         root = ET.fromstring(response.content)
         rates = {}
         base_rate = None
-        base_nominal = 1
 
         # Чтение всех валют
         for currency in root.findall("Valute"):
             char_code = currency.find("CharCode").text
-            value = float(currency.find("Value").text.replace(",", "."))
-            nominal = int(currency.find("Nominal").text)
+            vunit_rate = float(currency.find("VunitRate").text.replace(",", "."))
 
+            # Сохраняем VunitRate для каждой валюты
+            rates[char_code] = vunit_rate
+
+            # Определяем VunitRate базовой валюты
             if char_code == base_currency:
-                base_rate = value
-                base_nominal = nominal
-
-            if char_code in SUPPORTED_CURRENCIES:
-                rates[char_code] = value / nominal
+                base_rate = vunit_rate
 
         # Добавляем RUB как базовую валюту
         rates["RUB"] = 1.0
@@ -102,8 +101,9 @@ def get_exchange_rate(base_currency: str) -> dict:
         # Если базовая валюта не RUB, пересчитываем курсы
         if base_currency != "RUB" and base_rate:
             for char_code in rates:
-                rates[char_code] = (rates[char_code] / base_rate) * base_nominal
+                rates[char_code] = rates[char_code] / base_rate
 
+        # Кэшируем результат
         cache[base_currency] = rates
         return rates
 
@@ -112,6 +112,7 @@ def get_exchange_rate(base_currency: str) -> dict:
     except ET.ParseError as e:
         logger.error(f"Ошибка парсинга XML: {e}")
     return {}
+
 
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
