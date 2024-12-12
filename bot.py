@@ -73,13 +73,6 @@ def get_exchange_rate(base_currency: str) -> dict:
 		root = ET.fromstring(response.content)
 		rates = {}
 		base_rate = None
-		date_current = ''
-		val_curs = root.find("ValCurs")
-		if val_curs is None:
-			date_current = '0000.00.00'
-		else:
-			date_current = val_curs.get("Date")
-		rates['date'] = date_current
 
 		# Чтение всех валют
 		for currency in root.findall("Valute"):
@@ -102,8 +95,7 @@ def get_exchange_rate(base_currency: str) -> dict:
 		# Если базовая валюта не RUB, пересчитываем курсы
 		if base_currency != "RUB" and base_rate:
 			for char_code in rates:
-				if char_code != "date":
-					rates[char_code] = base_rate / rates[char_code]
+				rates[char_code] = base_rate / rates[char_code]
 
 		# Кэшируем результат
 		cache[base_currency] = rates
@@ -154,25 +146,30 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 	if rates:
 		if base_currency == "RUB":
 			# Для RUB: пересчитываем курс как 1/RUB
-			message = f"Курс валют на {rates['date']} относительно Рубля (RUB):\n"
-			message += "<table border='1'>"
+			message = f"<b>Курс валют на {rates['date']} относительно Рубля (RUB):</b>\n"
+			message += "<pre>"
+			message += "{:<10} {:<15}\n".format("Валюта", "Курс")
+			message += "-" * 26 + "\n"
 			for currency, rate in rates.items():
-				if currency != "RUB":
+				if currency != "RUB" and currency != "date":
 					inverse_rate = 1 / rate
-					#message += f"1 RUB = {inverse_rate:.6f} {currency}\n"
-					message += f"<tr><td>{currency}</td><td>{inverse_rate:.6f}</td></tr>"
-			message += "</table>"
+					message += "{:<10} {:<15.6f}\n".format(currency, inverse_rate)
+			message += "</pre>"
 		else:
 			# Для остальных валют стандартный формат
-			message = f"Курс валют на {rates['date']} относительно {SUPPORTED_CURRENCIES[base_currency]['name']} ({base_currency}):\n"
+			message = f"<b>Курс валют на {rates['date']} относительно {SUPPORTED_CURRENCIES[base_currency]['name']} ({base_currency}):</b>\n"
+			message += "<pre>"
+			message += "{:<10} {:<15}\n".format("Валюта", "Курс")
+			message += "-" * 26 + "\n"
 			for currency, rate in rates.items():
-				if currency != base_currency:
-					message += f"1 {base_currency} = {format_number} {currency}\n"
+				if currency != base_currency and currency != "date":
+					message += "{:<10} {:<15.6f}\n".format(currency, rate)
+			message += "</pre>"
 	else:
 		message = "Не удалось получить курсы валют. Попробуйте позже."
 
 	# Отображаем курс
-	await query.edit_message_text(text=message)
+	await query.edit_message_text(text=message, parse_mode="HTML")
 
 	# Возвращаемся на стартовое меню
 	await start(update, context)
