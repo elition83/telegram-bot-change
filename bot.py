@@ -52,14 +52,9 @@ def format_number(value: float) -> str:
 		# Форматирование с двумя знаками после запятой
 		return f"{value:.2f}"
 	else:
-		# Форматирование с тремя значащими цифрами после ведущих нулей
-		scientific_format = f"{value:.3e}"  # Преобразуем в научный формат
-		base, exponent = scientific_format.split("e")
-		exponent = int(exponent)  # Преобразуем порядок в число
-		formatted_value = f"{float(base) * (10 ** exponent):.{abs(exponent) + 3}f}"  # Учитываем порядок и добавляем 3 значащие цифры
-		return formatted_value.rstrip("0").rstrip(".")
-
-
+		# Форматирование для значений меньше 1 с тремя значащими цифрами
+		decimal_places = abs(int(f"{value:.0e}".split("e")[1])) + 3
+		return f"{value:.{decimal_places}f}".rstrip("0").rstrip(".")
 
 # Получение курсов валют с сайта ЦБ РФ
 def get_exchange_rate(base_currency: str) -> dict:
