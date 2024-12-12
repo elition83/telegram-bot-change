@@ -178,7 +178,7 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		# 	message += "</pre>"
 	else:
 		message = "Не удалось получить курсы валют. Попробуйте позже."
-	
+
 
 	# Отображаем курс
 	await query.edit_message_text(text=message, parse_mode="HTML")
