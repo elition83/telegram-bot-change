@@ -174,8 +174,7 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 	message += "{:<10} {:<15}\n".format("Валюта", "Курс")
 	message += "-" * 26 + "\n"
 	for currency, rate in rates.items():
-		if currency != "date":  # Пропускаем дату
-			message += "{:<10} {:<15}\n".format(currency, rate)
+		message += "{:<10} {:<15}\n".format(currency, 1/rate)
 	message += "</pre>"
 	# Отправка сообщения в Telegram
 	await context.bot.send_message(
