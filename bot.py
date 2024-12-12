@@ -102,7 +102,8 @@ def get_exchange_rate(base_currency: str) -> dict:
 		# Если базовая валюта не RUB, пересчитываем курсы
 		if base_currency != "RUB" and base_rate:
 			for char_code in rates:
-				rates[char_code] = base_rate / rates[char_code]
+				if char_code != "date":
+					rates[char_code] = base_rate / rates[char_code]
 
 		# Кэшируем результат
 		cache[base_currency] = rates
