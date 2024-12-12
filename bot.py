@@ -73,7 +73,12 @@ def get_exchange_rate(base_currency: str) -> dict:
 		root = ET.fromstring(response.content)
 		rates = {}
 		base_rate = None
-		date_current = root.find("ValCurs").get("Date")
+		date_current = ''
+		val_curs = root.find("ValCurs")
+		if val_curs is None:
+			date_current = '0000.00.00'
+		else:
+			date_current = val_curs.get("Date")
 		rates['date'] = date_current
 
 		# Чтение всех валют
