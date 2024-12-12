@@ -48,16 +48,14 @@ def get_currency_keyboard(prefix="rate_", exclude=None):
 	return InlineKeyboardMarkup(keyboard)
 
 def format_number(value: float) -> str:
-	if value >= 1:
-		# Для чисел >= 1 оставляем два знака после запятой
-		return f"{value:.2f}"
-	else:
-		# Для чисел < 1 оставляем три значащие цифры после ведущих нулей
-		scientific_format = f"{value:.3e}"  # Преобразуем в научный формат
-		base, exponent = scientific_format.split("e")
-		exponent = int(exponent)  # Преобразуем порядок
-		formatted_value = f"{float(base) * (10 ** exponent):.{abs(exponent) + 3}f}"
-		return formatted_value.rstrip("0").rstrip(".")
+    if value >= 1:
+        # Для чисел >= 1 оставляем два знака после запятой
+        return f"{value:.2f}"
+    else:
+        # Для чисел < 1 оставляем три значащие цифры после ведущих нулей
+        fractional_part = f"{value:.10f}".split(".")[1]
+        leading_zeros = len(fractional_part) - len(fractional_part.lstrip("0"))
+        return "0." + "0" * leading_zeros + fractional_part.lstrip("0")[:3]
 
 # Получение курсов валют с сайта ЦБ РФ
 def get_exchange_rate(base_currency: str) -> dict:
