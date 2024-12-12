@@ -55,7 +55,8 @@ def format_number(value: float) -> str:
 		# Форматирование с тремя значащими цифрами после нулей
 		scientific_format = f"{value:.3e}"
 		base, exponent = scientific_format.split("e")
-		formatted_value = f"{float(base):.3f}"
+		exponent = int(exponent)  # Преобразуем порядок в число
+		formatted_value = f"{float(base) * (10 ** exponent):.3f}"  # Учитываем порядок
 		return formatted_value.rstrip("0").rstrip(".")
 
 
