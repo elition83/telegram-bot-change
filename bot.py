@@ -49,13 +49,15 @@ def get_currency_keyboard(prefix="rate_", exclude=None):
 
 def format_number(value: float) -> str:
 	if value >= 1:
-		# Для чисел >= 1, выводим с двумя знаками после запятой
+		# Для чисел >= 1 оставляем два знака после запятой
 		return f"{value:.2f}"
 	else:
-		# Для чисел < 1, три значащие цифры после ведущих нулей
-		decimal_places = len(f"{value:.10f}".split(".")[1][:3])
-		formatted_value = f"{value:.{decimal_places + 2}f}"
-		return formatted_value[:len("0.") + 3].rstrip("0").rstrip(".")
+		# Для чисел < 1 оставляем три значащие цифры после ведущих нулей
+		scientific_format = f"{value:.3e}"  # Преобразуем в научный формат
+		base, exponent = scientific_format.split("e")
+		exponent = int(exponent)  # Преобразуем порядок
+		formatted_value = f"{float(base) * (10 ** exponent):.{abs(exponent) + 3}f}"
+		return formatted_value.rstrip("0").rstrip(".")
 
 # Получение курсов валют с сайта ЦБ РФ
 def get_exchange_rate(base_currency: str) -> dict:
