@@ -149,7 +149,7 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 			message += "-" * 26 + "\n"
 			for currency, rate in rates.items():
 				if currency != "date" and currency != base_currency:
-					if currency == "RUB":
+					if currency != "RUB":
 						inverse_rate = 1 / rate
 						message += "{:<10} {:<15}\n".format(currency, format_number(inverse_rate))
 					else:
