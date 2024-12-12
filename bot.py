@@ -193,7 +193,11 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 			message += "{:<10} {:<15}\n".format(currency, rate)
 	message += "</pre>"
 	# Отправка сообщения в Telegram
-	await query.edit_message_text(text=message, parse_mode="HTML")
+	await context.bot.send_message(
+		chat_id=query.message.chat_id,
+		text=message,
+		parse_mode="HTML"
+	)
 
 
 	# Возвращаемся на стартовое меню
