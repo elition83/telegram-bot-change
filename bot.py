@@ -153,12 +153,13 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		message += "-" * 26 + "\n"
 
 		for currency, rate in rates.items():
-			# Пересчёт курсов
-			if base_currency == "RUB":
-				converted_rate = 1 / rate  # Если базовая валюта рубль
-			else:
-				converted_rate = rate / base_rate  # Пересчёт относительно базовой валюты
-			message += "{:<10} {:<15}\n".format(currency, format_number(converted_rate))
+			if currency != base_currency:
+				# Пересчёт курсов
+				if base_currency == "RUB":
+					converted_rate = 1 / rate  # Если базовая валюта рубль
+				else:
+					converted_rate = rate / base_rate  # Пересчёт относительно базовой валюты
+				message += "{:<10} {:<15}\n".format(currency, format_number(converted_rate))
 
 		message += "</pre>"
 	else:
