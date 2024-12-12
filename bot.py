@@ -144,47 +144,32 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 	rates = get_exchange_rate(base_currency)
 
 	if rates:
-			message = "<pre>"
-			message += "{:<10} {:<15}\n".format("Валюта", f"Курс {SUPPORTED_CURRENCIES[base_currency]['name']} ({base_currency})")
-			message += "-" * 26 + "\n"
-			for currency, rate in rates.items():
-				if currency != "date" and currency != base_currency:
-					if currency != "RUB":
-						inverse_rate = 1 / rate
-						message += "{:<10} {:<15}\n".format(currency, format_number(inverse_rate))
-					else:
-						message += "{:<10} {:<15}\n".format(currency, format_number(rate))
-			message += "</pre>"
-		# if base_currency == "RUB":
-		# 	# Для RUB: пересчитываем курс как 1/RUB
-		# 	message = "<b>Курс валют относительно Рубля (RUB):</b>\n"
-		# 	message += "<pre>"
-		# 	message += "{:<10} {:<15}\n".format("Валюта", "Курс ")
-		# 	message += "-" * 26 + "\n"
-		# 	for currency, rate in rates.items():
-		# 		if currency != "RUB" and currency != "date":
-		# 			inverse_rate = 1 / rate
-		# 			message += "{:<10} {:<15.6f}\n".format(currency, inverse_rate)
-		# 	message += "</pre>"
-		# else:
-		# 	# Для остальных валют стандартный формат
-		# 	message = f"<b>Курс валют относительно {SUPPORTED_CURRENCIES[base_currency]['name']} ({base_currency}):</b>\n"
-		# 	message += "<pre>"
-		# 	message += "{:<10} {:<15}\n".format("Валюта", "Курс")
-		# 	message += "-" * 26 + "\n"
-		# 	for currency, rate in rates.items():
-		# 		if currency != base_currency and currency != "date":
-		# 			message += "{:<10} {:<15.6f}\n".format(currency, rate)
-		# 	message += "</pre>"
+		base_rate = rates[base_currency]  # Курс базовой валюты к рублю
+
+		# Формируем таблицу
+		message = "<pre>"
+		message += "{:<10} {:<15}\n".format("Валюта", f"Курс {SUPPORTED_CURRENCIES[base_currency]['name']} ({base_currency})")
+		message += "-" * 26 + "\n"
+
+		for currency, rate in rates.items():
+			# Пересчёт курсов
+			if base_currency == "RUB":
+				converted_rate = 1 / rate  # Если базовая валюта рубль
+			else:
+				converted_rate = rate / base_rate  # Пересчёт относительно базовой валюты
+			message += "{:<10} {:<15}\n".format(currency, format_number(converted_rate))
+
+		message += "</pre>"
 	else:
 		message = "Не удалось получить курсы валют. Попробуйте позже."
+
 
 
 	# Отображаем курс
 	await query.edit_message_text(text=message, parse_mode="HTML")
 
 	#тестовое сообщение с курсами валют
-	message = f"Курсы валют на {rates.get('date', 'неизвестную дату')}:\n"
+	message = f"Курсы валют\n"
 	message += "<pre>"  # Используем форматирование HTML для красивого вывода
 	message += "{:<10} {:<15}\n".format("Валюта", "Курс")
 	message += "-" * 26 + "\n"
