@@ -178,9 +178,23 @@ async def handle_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 		# 	message += "</pre>"
 	else:
 		message = "Не удалось получить курсы валют. Попробуйте позже."
+	
 
 	# Отображаем курс
 	await query.edit_message_text(text=message, parse_mode="HTML")
+
+	#тестовое сообщение с курсами валют
+	message = f"Курсы валют на {rates.get('date', 'неизвестную дату')}:\n"
+	message += "<pre>"  # Используем форматирование HTML для красивого вывода
+	message += "{:<10} {:<15}\n".format("Валюта", "Курс")
+	message += "-" * 26 + "\n"
+	for currency, rate in rates.items():
+		if currency != "date":  # Пропускаем дату
+			message += "{:<10} {:<15}\n".format(currency, rate)
+	message += "</pre>"
+	# Отправка сообщения в Telegram
+	await query.edit_message_text(text=message, parse_mode="HTML")
+
 
 	# Возвращаемся на стартовое меню
 	await start(update, context)
