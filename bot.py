@@ -52,12 +52,13 @@ def format_number(value: float) -> str:
 		# Форматирование с двумя знаками после запятой
 		return f"{value:.2f}"
 	else:
-		# Форматирование с тремя значащими цифрами после нулей
-		scientific_format = f"{value:.3e}"
+		# Форматирование с тремя значащими цифрами после ведущих нулей
+		scientific_format = f"{value:.3e}"  # Преобразуем в научный формат
 		base, exponent = scientific_format.split("e")
 		exponent = int(exponent)  # Преобразуем порядок в число
-		formatted_value = f"{float(base) * (10 ** exponent):.3f}"  # Учитываем порядок
+		formatted_value = f"{float(base) * (10 ** exponent):.{abs(exponent) + 3}f}"  # Учитываем порядок и добавляем 3 значащие цифры
 		return formatted_value.rstrip("0").rstrip(".")
+
 
 
 # Получение курсов валют с сайта ЦБ РФ
