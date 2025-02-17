@@ -121,6 +121,66 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 			"Привет! Выберите действие:", reply_markup=get_main_keyboard()
 		)
 
+# Обработчик команды /calc
+async def calc(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    user_calculator[user_id] = {"input": "", "base_currency": None}
+
+    await update.message.reply_text(
+        "Введите сумму с помощью кнопок ниже и нажмите ✅ Рассчитать:",
+        reply_markup=get_calculator_keyboard()
+    )
+
+Генерация клавиатуры калькулятора
+def get_calculator_keyboard():
+    keyboard = [
+        [InlineKeyboardButton("1", callback_data="calc_1"), InlineKeyboardButton("2", callback_data="calc_2"), InlineKeyboardButton("3", callback_data="calc_3")],
+        [InlineKeyboardButton("4", callback_data="calc_4"), InlineKeyboardButton("5", callback_data="calc_5"), InlineKeyboardButton("6", callback_data="calc_6")],
+        [InlineKeyboardButton("7", callback_data="calc_7"), InlineKeyboardButton("8", callback_data="calc_8"), InlineKeyboardButton("9", callback_data="calc_9")],
+        [InlineKeyboardButton("0", callback_data="calc_0"), InlineKeyboardButton("⬅️", callback_data="calc_backspace"), InlineKeyboardButton("C", callback_data="calc_clear")],
+        [InlineKeyboardButton("✅ Рассчитать", callback_data="calc_confirm")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+# Обработчик нажатий на кнопки калькулятора
+async def handle_calculator(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    user_id = query.from_user.id
+    data = query.data
+
+    if user_id not in user_calculator:
+        user_calculator[user_id] = {"input": "", "base_currency": None}
+
+    if data.startswith("calc_"):
+        action = data.replace("calc_", "")
+        if action.isdigit():
+            user_calculator[user_id]["input"] += action
+        elif action == "backspace":
+            user_calculator[user_id]["input"] = user_calculator[user_id]["input"][:-1]
+        elif action == "clear":
+            user_calculator[user_id]["input"] = ""
+
+    await query.answer()
+    await query.edit_message_text(
+        text=f"Введите сумму: {user_calculator[user_id]['input']}",
+        reply_markup=get_calculator_keyboard()
+    )
+
+# Обработчик подтверждения расчета
+async def confirm_calculation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    if user_calculator[user_id]["input"] == "":
+        await query.answer("Сначала введите сумму!", show_alert=True)
+        return
+
+    context.user_data['state'] = 'awaiting_currency'
+    await query.edit_message_text(
+        text=f"Вы ввели сумму: {user_calculator[user_id]['input']}\nВыберите валюту для конвертации:",
+        reply_markup=get_currency_keyboard(prefix="calc_")
+    )
 
 # Обработчик кнопки "Текущий курс"
 async def current_rate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
